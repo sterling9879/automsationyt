@@ -314,20 +314,28 @@ import aiohttp
 import asyncio
 import base64
 from typing import Optional, Dict, Any, List
+from datetime import datetime
+
+# Cache for models
+_models_cache = {"image_models": None, "video_models": None, "last_fetch": None}
 
 class FreepikService:
     BASE_URL = "https://api.freepik.com/v1"
-    IMAGE_MODELS = [
-        {"id": "mystic", "name": "Mystic", "description": "Ultra-realistic high resolution"},
-        {"id": "realism", "name": "Realism", "description": "Realistic photos"},
-        {"id": "flux", "name": "Flux", "description": "Creative images"},
-        {"id": "zen", "name": "Zen", "description": "Clean and minimalist"},
-        {"id": "flexible", "name": "Flexible", "description": "Great for illustrations"},
+    FALLBACK_IMAGE_MODELS = [
+        {"id": "realism", "name": "Realism", "description": "Realistic photos with natural colors"},
+        {"id": "flux", "name": "Flux", "description": "Creative and artistic images"},
+        {"id": "mystic", "name": "Mystic", "description": "Ultra-realistic high resolution images"},
+        {"id": "zen", "name": "Zen", "description": "Clean and minimalist results"},
+        {"id": "flexible", "name": "Flexible", "description": "Great for illustrations and fantasy"},
+        {"id": "super_real", "name": "Super Real", "description": "Maximum realism priority"},
+        {"id": "editorial_portraits", "name": "Editorial Portraits", "description": "Professional portrait photos"},
     ]
-    VIDEO_MODELS = [
-        {"id": "kling-std", "name": "Kling Standard", "description": "Standard quality"},
-        {"id": "kling-pro", "name": "Kling Pro", "description": "High quality"},
-        {"id": "kling-v2", "name": "Kling V2", "description": "Latest model"},
+    FALLBACK_VIDEO_MODELS = [
+        {"id": "kling-std", "name": "Kling Standard 1.6", "description": "Standard quality, faster rendering"},
+        {"id": "kling-pro", "name": "Kling Pro 1.6", "description": "High quality professional videos"},
+        {"id": "kling-v2", "name": "Kling V2", "description": "Latest Kling model with improvements"},
+        {"id": "minimax-768p", "name": "MiniMax Hailuo 768p", "description": "Good for facial expressions"},
+        {"id": "minimax-1080p", "name": "MiniMax Hailuo 1080p", "description": "High definition 1080p"},
     ]
 
     def __init__(self, api_key: str):
@@ -343,6 +351,48 @@ class FreepikService:
                     return {"valid": False, "message": f"Error: {response.status}"}
         except Exception as e:
             return {"valid": False, "message": str(e)}
+
+    async def fetch_image_models(self) -> List[Dict[str, Any]]:
+        global _models_cache
+        if _models_cache["image_models"] and _models_cache["last_fetch"]:
+            elapsed = (datetime.now() - _models_cache["last_fetch"]).seconds
+            if elapsed < 3600:
+                return _models_cache["image_models"]
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{self.BASE_URL}/ai/mystic/models", headers=self.headers, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        models = data.get("data", {}).get("models", [])
+                        if models:
+                            formatted = [{"id": m.get("id", m.get("name", "")), "name": m.get("name", m.get("id", "")), "description": m.get("description", "")} for m in models]
+                            _models_cache["image_models"] = formatted
+                            _models_cache["last_fetch"] = datetime.now()
+                            return formatted
+        except:
+            pass
+        return self.FALLBACK_IMAGE_MODELS
+
+    async def fetch_video_models(self) -> List[Dict[str, Any]]:
+        global _models_cache
+        if _models_cache["video_models"] and _models_cache["last_fetch"]:
+            elapsed = (datetime.now() - _models_cache["last_fetch"]).seconds
+            if elapsed < 3600:
+                return _models_cache["video_models"]
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{self.BASE_URL}/ai/image-to-video/models", headers=self.headers, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        models = data.get("data", {}).get("models", [])
+                        if models:
+                            formatted = [{"id": m.get("id", m.get("name", "")), "name": m.get("name", m.get("id", "")), "description": m.get("description", "")} for m in models]
+                            _models_cache["video_models"] = formatted
+                            _models_cache["last_fetch"] = datetime.now()
+                            return formatted
+        except:
+            pass
+        return self.FALLBACK_VIDEO_MODELS
 
     async def generate_image(self, prompt: str, model: str = "mystic", resolution: str = "2k", aspect_ratio: str = "square_1_1") -> Dict[str, Any]:
         payload = {"prompt": prompt, "resolution": resolution, "aspect_ratio": aspect_ratio, "creative_detailing": 50, "engine": "automatic"}
@@ -434,11 +484,11 @@ class FreepikService:
 
     @classmethod
     def get_image_models(cls):
-        return cls.IMAGE_MODELS
+        return cls.FALLBACK_IMAGE_MODELS
 
     @classmethod
     def get_video_models(cls):
-        return cls.VIDEO_MODELS
+        return cls.FALLBACK_VIDEO_MODELS
 
 async def download_image(url: str) -> Optional[bytes]:
     try:
@@ -471,22 +521,46 @@ EOF
 
 # routes/models.py
 cat > ${INSTALL_DIR}/backend/routes/models.py << 'MODEOF'
+import asyncio
 from fastapi import APIRouter
 from services.freepik_api import FreepikService
+from database.db import get_setting
 
 router = APIRouter()
 
+async def get_freepik_service():
+    api_key = await get_setting("freepik_api_key")
+    if api_key:
+        return FreepikService(api_key)
+    return None
+
 @router.get("/models/image")
 async def list_image_models():
-    return {"success": True, "models": FreepikService.get_image_models()}
+    service = await get_freepik_service()
+    if service:
+        models = await service.fetch_image_models()
+    else:
+        models = FreepikService.get_image_models()
+    return {"success": True, "models": models}
 
 @router.get("/models/video")
 async def list_video_models():
-    return {"success": True, "models": FreepikService.get_video_models()}
+    service = await get_freepik_service()
+    if service:
+        models = await service.fetch_video_models()
+    else:
+        models = FreepikService.get_video_models()
+    return {"success": True, "models": models}
 
 @router.get("/models")
 async def list_all_models():
-    return {"success": True, "image_models": FreepikService.get_image_models(), "video_models": FreepikService.get_video_models()}
+    service = await get_freepik_service()
+    if service:
+        image_models, video_models = await asyncio.gather(service.fetch_image_models(), service.fetch_video_models())
+    else:
+        image_models = FreepikService.get_image_models()
+        video_models = FreepikService.get_video_models()
+    return {"success": True, "image_models": image_models, "video_models": video_models}
 MODEOF
 
 # routes/settings.py

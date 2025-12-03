@@ -1,6 +1,7 @@
 """
 Freepik API Integration Service
 Handles image generation and video animation
+Fetches models dynamically from API
 """
 
 import aiohttp
@@ -9,26 +10,32 @@ import base64
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
+# Cache for models
+_models_cache = {
+    "image_models": None,
+    "video_models": None,
+    "last_fetch": None
+}
+
 
 class FreepikService:
     """Service for interacting with Freepik API"""
 
     BASE_URL = "https://api.freepik.com/v1"
 
-    # Available image models
-    IMAGE_MODELS = [
+    # Fallback models if API fails
+    FALLBACK_IMAGE_MODELS = [
         {"id": "realism", "name": "Realism", "description": "Realistic photos with natural colors"},
-        {"id": "flux", "name": "Flux", "description": "Creative and artistic images"},
+        {"id": "flux", "name": "Flux", "description": "Creative and artistic images (Google Imagen 3)"},
         {"id": "mystic", "name": "Mystic", "description": "Ultra-realistic high resolution images"},
         {"id": "zen", "name": "Zen", "description": "Clean and minimalist results"},
-        {"id": "flexible", "name": "Flexible", "description": "Great for illustrations"},
+        {"id": "flexible", "name": "Flexible", "description": "Great for illustrations and fantasy"},
         {"id": "super_real", "name": "Super Real", "description": "Maximum realism priority"},
         {"id": "editorial_portraits", "name": "Editorial Portraits", "description": "Professional portrait photos"},
     ]
 
-    # Available video models
-    VIDEO_MODELS = [
-        {"id": "kling-std", "name": "Kling Standard 1.6", "description": "Standard quality video generation"},
+    FALLBACK_VIDEO_MODELS = [
+        {"id": "kling-std", "name": "Kling Standard 1.6", "description": "Standard quality, faster rendering"},
         {"id": "kling-pro", "name": "Kling Pro 1.6", "description": "High quality professional videos"},
         {"id": "kling-v2", "name": "Kling V2", "description": "Latest Kling model with improvements"},
         {"id": "minimax-768p", "name": "MiniMax Hailuo 768p", "description": "Good for facial expressions"},
@@ -60,6 +67,82 @@ class FreepikService:
         except Exception as e:
             return {"valid": False, "message": str(e)}
 
+    async def fetch_image_models(self) -> List[Dict[str, Any]]:
+        """Fetch available image models from Freepik API"""
+        global _models_cache
+
+        # Return cache if fresh (less than 1 hour)
+        if _models_cache["image_models"] and _models_cache["last_fetch"]:
+            elapsed = (datetime.now() - _models_cache["last_fetch"]).seconds
+            if elapsed < 3600:
+                return _models_cache["image_models"]
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Try to get models from Mystic API info
+                async with session.get(
+                    f"{self.BASE_URL}/ai/mystic/models",
+                    headers=self.headers,
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        models = data.get("data", {}).get("models", [])
+                        if models:
+                            formatted_models = []
+                            for model in models:
+                                formatted_models.append({
+                                    "id": model.get("id", model.get("name", "")),
+                                    "name": model.get("name", model.get("id", "")),
+                                    "description": model.get("description", "")
+                                })
+                            _models_cache["image_models"] = formatted_models
+                            _models_cache["last_fetch"] = datetime.now()
+                            return formatted_models
+        except Exception:
+            pass
+
+        # Fallback to hardcoded models
+        return self.FALLBACK_IMAGE_MODELS
+
+    async def fetch_video_models(self) -> List[Dict[str, Any]]:
+        """Fetch available video models from Freepik API"""
+        global _models_cache
+
+        # Return cache if fresh (less than 1 hour)
+        if _models_cache["video_models"] and _models_cache["last_fetch"]:
+            elapsed = (datetime.now() - _models_cache["last_fetch"]).seconds
+            if elapsed < 3600:
+                return _models_cache["video_models"]
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Try to get video models info
+                async with session.get(
+                    f"{self.BASE_URL}/ai/image-to-video/models",
+                    headers=self.headers,
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        models = data.get("data", {}).get("models", [])
+                        if models:
+                            formatted_models = []
+                            for model in models:
+                                formatted_models.append({
+                                    "id": model.get("id", model.get("name", "")),
+                                    "name": model.get("name", model.get("id", "")),
+                                    "description": model.get("description", "")
+                                })
+                            _models_cache["video_models"] = formatted_models
+                            _models_cache["last_fetch"] = datetime.now()
+                            return formatted_models
+        except Exception:
+            pass
+
+        # Fallback to hardcoded models
+        return self.FALLBACK_VIDEO_MODELS
+
     async def generate_image(
         self,
         prompt: str,
@@ -67,11 +150,7 @@ class FreepikService:
         resolution: str = "2k",
         aspect_ratio: str = "square_1_1"
     ) -> Dict[str, Any]:
-        """
-        Generate image using Freepik Mystic API
-
-        Returns task_id for polling status
-        """
+        """Generate image using Freepik Mystic API"""
         endpoint = f"{self.BASE_URL}/ai/mystic"
 
         payload = {
@@ -135,7 +214,6 @@ class FreepikService:
                             "task_id": task_id
                         }
 
-                        # If completed, include generated images
                         if status == "COMPLETED":
                             generated = task_data.get("generated", [])
                             if generated:
@@ -180,12 +258,7 @@ class FreepikService:
         prompt: str = "",
         duration: str = "5"
     ) -> Dict[str, Any]:
-        """
-        Generate video from image using Freepik API
-
-        model options: kling-std, kling-pro, kling-v2
-        """
-        # Map model to endpoint
+        """Generate video from image using Freepik API"""
         model_endpoints = {
             "kling-std": "kling-std",
             "kling-pro": "kling-pro",
@@ -264,7 +337,6 @@ class FreepikService:
                             "task_id": task_id
                         }
 
-                        # If completed, include video URL
                         if status == "COMPLETED":
                             video_url = task_data.get("video", {}).get("url")
                             if video_url:
@@ -304,13 +376,13 @@ class FreepikService:
 
     @classmethod
     def get_image_models(cls) -> List[Dict[str, str]]:
-        """Return available image models"""
-        return cls.IMAGE_MODELS
+        """Return fallback image models (sync)"""
+        return cls.FALLBACK_IMAGE_MODELS
 
     @classmethod
     def get_video_models(cls) -> List[Dict[str, str]]:
-        """Return available video models"""
-        return cls.VIDEO_MODELS
+        """Return fallback video models (sync)"""
+        return cls.FALLBACK_VIDEO_MODELS
 
 
 async def download_image(url: str) -> Optional[bytes]:
