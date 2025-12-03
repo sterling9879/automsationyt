@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en" x-data="app()" x-init="init()">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viral Video SaaS - AI Video Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366f1',
+                        secondary: '#8b5cf6',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl">🎬</span>
+                <h1 class="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent">
+                    Viral Video SaaS
+                </h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <!-- API Key Status -->
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-400">API:</span>
+                    <span x-show="apiKeyConfigured" class="text-green-400 text-sm">
+                        <span x-text="maskedApiKey"></span>
+                    </span>
+                    <span x-show="!apiKeyConfigured" class="text-yellow-400 text-sm">Not configured</span>
+                </div>
+                <!-- Settings Button -->
+                <button @click="showSettings = true" class="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <!-- Tabs -->
+        <div class="flex space-x-1 mb-8 bg-gray-800 rounded-lg p-1 max-w-md">
+            <button
+                @click="activeTab = 'generate'"
+                :class="activeTab === 'generate' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'"
+                class="flex-1 px-4 py-2 rounded-md font-medium transition">
+                Generate
+            </button>
+            <button
+                @click="activeTab = 'batch'"
+                :class="activeTab === 'batch' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'"
+                class="flex-1 px-4 py-2 rounded-md font-medium transition">
+                Batch
+            </button>
+            <button
+                @click="activeTab = 'history'; loadHistory()"
+                :class="activeTab === 'history' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'"
+                class="flex-1 px-4 py-2 rounded-md font-medium transition">
+                History
+            </button>
+        </div>
+
+        <!-- Generate Tab -->
+        <div x-show="activeTab === 'generate'" x-transition class="space-y-6">
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h2 class="text-xl font-semibold mb-6 flex items-center">
+                    <span class="mr-2">🎬</span> Single Video Generation
+                </h2>
+
+                <!-- Model Selection -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">
+                            <span class="mr-1">📷</span> Image Model
+                        </label>
+                        <select x-model="generateForm.imageModel" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            <template x-for="model in imageModels" :key="model.id">
+                                <option :value="model.id" x-text="model.name + ' - ' + model.description"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">
+                            <span class="mr-1">🎥</span> Video Model
+                        </label>
+                        <select x-model="generateForm.videoModel" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            <template x-for="model in videoModels" :key="model.id">
+                                <option :value="model.id" x-text="model.name + ' - ' + model.description"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Prompt -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-400 mb-2">
+                        <span class="mr-1">✏️</span> Prompt
+                    </label>
+                    <textarea
+                        x-model="generateForm.prompt"
+                        rows="4"
+                        placeholder="Describe your video... (e.g., A majestic lion walking through a golden savanna at sunset)"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                    ></textarea>
+                </div>
+
+                <!-- Generate Button -->
+                <button
+                    @click="generateVideo()"
+                    :disabled="isGenerating || !generateForm.prompt"
+                    :class="isGenerating || !generateForm.prompt ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'"
+                    class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center space-x-2">
+                    <span x-show="!isGenerating">🚀</span>
+                    <span x-show="isGenerating" class="animate-spin">⏳</span>
+                    <span x-text="isGenerating ? 'Generating...' : 'Generate Video'"></span>
+                </button>
+
+                <!-- Progress -->
+                <div x-show="isGenerating" x-transition class="mt-6 space-y-4">
+                    <div class="bg-gray-700 rounded-full h-2">
+                        <div
+                            class="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all duration-500"
+                            :style="'width: ' + progress + '%'">
+                        </div>
+                    </div>
+                    <div class="flex flex-col space-y-2">
+                        <div class="flex items-center space-x-2" :class="currentStep === 'image_generating' ? 'text-indigo-400' : (stepCompleted('image_generating') ? 'text-green-400' : 'text-gray-500')">
+                            <span x-text="stepCompleted('image_generating') ? '✓' : (currentStep === 'image_generating' ? '◉' : '○')"></span>
+                            <span>Generating image...</span>
+                        </div>
+                        <div class="flex items-center space-x-2" :class="currentStep === 'image_processing' ? 'text-indigo-400' : (stepCompleted('image_processing') ? 'text-green-400' : 'text-gray-500')">
+                            <span x-text="stepCompleted('image_processing') ? '✓' : (currentStep === 'image_processing' ? '◉' : '○')"></span>
+                            <span>Processing image...</span>
+                        </div>
+                        <div class="flex items-center space-x-2" :class="currentStep === 'video_generating' ? 'text-indigo-400' : (stepCompleted('video_generating') ? 'text-green-400' : 'text-gray-500')">
+                            <span x-text="stepCompleted('video_generating') ? '✓' : (currentStep === 'video_generating' ? '◉' : '○')"></span>
+                            <span>Animating video...</span>
+                        </div>
+                        <div class="flex items-center space-x-2" :class="currentStep === 'video_processing' ? 'text-indigo-400' : (stepCompleted('video_processing') ? 'text-green-400' : 'text-gray-500')">
+                            <span x-text="stepCompleted('video_processing') ? '✓' : (currentStep === 'video_processing' ? '◉' : '○')"></span>
+                            <span>Processing video...</span>
+                        </div>
+                        <div class="flex items-center space-x-2" :class="currentStep === 'finalizing' ? 'text-indigo-400' : (stepCompleted('finalizing') ? 'text-green-400' : 'text-gray-500')">
+                            <span x-text="stepCompleted('finalizing') ? '✓' : (currentStep === 'finalizing' ? '◉' : '○')"></span>
+                            <span>Finalizing...</span>
+                        </div>
+                    </div>
+                    <p class="text-center text-gray-400 text-sm" x-text="statusMessage"></p>
+                </div>
+            </div>
+
+            <!-- Last Generated Video -->
+            <div x-show="lastGeneratedVideo" x-transition class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <span class="mr-2">🎉</span> Last Generated Video
+                </h3>
+                <div class="aspect-video bg-black rounded-lg overflow-hidden">
+                    <video
+                        :src="lastGeneratedVideo"
+                        controls
+                        class="w-full h-full object-contain">
+                    </video>
+                </div>
+                <div class="mt-4 flex space-x-3">
+                    <a
+                        :href="lastGeneratedVideo"
+                        download
+                        class="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-center transition">
+                        ⬇️ Download
+                    </a>
+                    <button
+                        @click="lastGeneratedVideo = null"
+                        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">
+                        ✕ Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Batch Tab -->
+        <div x-show="activeTab === 'batch'" x-transition class="space-y-6">
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h2 class="text-xl font-semibold mb-6 flex items-center">
+                    <span class="mr-2">🔄</span> Batch Generation (Loop)
+                </h2>
+
+                <!-- Model Selection -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">
+                            <span class="mr-1">📷</span> Image Model
+                        </label>
+                        <select x-model="batchForm.imageModel" :disabled="batchRunning" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50">
+                            <template x-for="model in imageModels" :key="model.id">
+                                <option :value="model.id" x-text="model.name"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">
+                            <span class="mr-1">🎥</span> Video Model
+                        </label>
+                        <select x-model="batchForm.videoModel" :disabled="batchRunning" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50">
+                            <template x-for="model in videoModels" :key="model.id">
+                                <option :value="model.id" x-text="model.name"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Prompt -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-400 mb-2">
+                        <span class="mr-1">✏️</span> Prompt Base
+                    </label>
+                    <textarea
+                        x-model="batchForm.prompt"
+                        :disabled="batchRunning"
+                        rows="3"
+                        placeholder="Same prompt will be used for all videos..."
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none disabled:opacity-50"
+                    ></textarea>
+                </div>
+
+                <!-- Batch Settings -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">
+                            <span class="mr-1">🔢</span> Quantity (0 = infinite)
+                        </label>
+                        <input
+                            type="number"
+                            x-model.number="batchForm.quantity"
+                            :disabled="batchRunning"
+                            min="0"
+                            placeholder="10"
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">
+                            <span class="mr-1">⏱️</span> Interval (seconds)
+                        </label>
+                        <input
+                            type="number"
+                            x-model.number="batchForm.interval"
+                            :disabled="batchRunning"
+                            min="10"
+                            placeholder="30"
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50">
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex space-x-3">
+                    <button
+                        @click="startBatch()"
+                        :disabled="batchRunning || !batchForm.prompt"
+                        :class="batchRunning || !batchForm.prompt ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-700'"
+                        class="flex-1 bg-green-600 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center space-x-2">
+                        <span>▶️</span>
+                        <span>Start Production</span>
+                    </button>
+                    <button
+                        @click="stopBatch()"
+                        :disabled="!batchRunning"
+                        :class="!batchRunning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700'"
+                        class="flex-1 bg-red-600 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center space-x-2">
+                        <span>⏹️</span>
+                        <span>Stop</span>
+                    </button>
+                </div>
+
+                <!-- Batch Progress -->
+                <div x-show="batchRunning || batchLogs.length > 0" x-transition class="mt-6 space-y-4">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Progress:</span>
+                        <span x-text="batchCompleted + '/' + (batchTotal || '∞') + ' videos generated'"></span>
+                    </div>
+                    <div class="bg-gray-700 rounded-full h-3">
+                        <div
+                            class="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all duration-500"
+                            :style="'width: ' + batchPercentage + '%'">
+                        </div>
+                    </div>
+
+                    <!-- Log -->
+                    <div class="bg-gray-900 rounded-lg p-4 h-48 overflow-y-auto font-mono text-sm">
+                        <template x-for="(log, index) in batchLogs" :key="index">
+                            <div class="py-1" :class="log.includes('✅') ? 'text-green-400' : (log.includes('Error') ? 'text-red-400' : 'text-gray-400')">
+                                <span x-text="log"></span>
+                            </div>
+                        </template>
+                        <div x-show="batchLogs.length === 0" class="text-gray-500">
+                            Waiting for logs...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div x-show="activeTab === 'history'" x-transition class="space-y-6">
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-semibold flex items-center">
+                        <span class="mr-2">📚</span> Video History
+                    </h2>
+                    <div class="flex items-center space-x-3">
+                        <input
+                            type="text"
+                            x-model="searchTerm"
+                            @input.debounce.300ms="loadHistory()"
+                            placeholder="Search prompts..."
+                            class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <button @click="loadHistory()" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">
+                            🔄
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="flex items-center space-x-6 mb-6 text-sm text-gray-400">
+                    <span>📊 Total: <span class="text-white" x-text="historyStats.total_videos || 0"></span> videos</span>
+                    <span>💾 Storage: <span class="text-white" x-text="historyStats.storage_used_formatted || '0 B'"></span></span>
+                </div>
+
+                <!-- Video Grid -->
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <template x-for="video in historyVideos" :key="video.id">
+                        <div class="bg-gray-700 rounded-lg overflow-hidden group">
+                            <div class="aspect-square relative">
+                                <img
+                                    :src="video.thumbnail_path || '/assets/placeholder.png'"
+                                    @error="$event.target.src='/assets/placeholder.png'"
+                                    class="w-full h-full object-cover"
+                                    alt="Video thumbnail">
+                                <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                    <button
+                                        @click="playVideo(video)"
+                                        class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition">
+                                        ▶️
+                                    </button>
+                                </div>
+                                <div x-show="video.status === 'processing'" class="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center">
+                                    <span class="animate-pulse text-yellow-400">⏳ Processing...</span>
+                                </div>
+                            </div>
+                            <div class="p-2">
+                                <p class="text-xs text-gray-400 truncate" x-text="formatDate(video.created_at)"></p>
+                                <div class="flex justify-between mt-1">
+                                    <a
+                                        :href="video.video_path"
+                                        download
+                                        x-show="video.video_path"
+                                        class="text-sm text-indigo-400 hover:text-indigo-300">
+                                        ⬇️
+                                    </a>
+                                    <button
+                                        @click="deleteVideo(video.id)"
+                                        class="text-sm text-red-400 hover:text-red-300">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Empty State -->
+                <div x-show="historyVideos.length === 0" class="text-center py-12 text-gray-500">
+                    <span class="text-4xl mb-4 block">📭</span>
+                    <p>No videos yet. Start generating!</p>
+                </div>
+
+                <!-- Pagination -->
+                <div x-show="historyTotalPages > 1" class="flex items-center justify-center space-x-4 mt-6">
+                    <button
+                        @click="loadHistory(historyPage - 1)"
+                        :disabled="historyPage <= 1"
+                        :class="historyPage <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-600'"
+                        class="px-4 py-2 bg-gray-700 rounded-lg transition">
+                        ◀️ Previous
+                    </button>
+                    <span class="text-gray-400">
+                        Page <span x-text="historyPage"></span> of <span x-text="historyTotalPages"></span>
+                    </span>
+                    <button
+                        @click="loadHistory(historyPage + 1)"
+                        :disabled="historyPage >= historyTotalPages"
+                        :class="historyPage >= historyTotalPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-600'"
+                        class="px-4 py-2 bg-gray-700 rounded-lg transition">
+                        Next ▶️
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div x-show="showSettings" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md mx-4 border border-gray-700" @click.away="showSettings = false">
+            <h3 class="text-xl font-semibold mb-6 flex items-center">
+                <span class="mr-2">⚙️</span> Settings
+            </h3>
+
+            <!-- API Key -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-400 mb-2">
+                    🔑 Freepik API Key
+                </label>
+                <div class="flex space-x-2">
+                    <input
+                        type="password"
+                        x-model="newApiKey"
+                        placeholder="Enter your Freepik API key"
+                        class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <button
+                        @click="saveApiKey()"
+                        :disabled="!newApiKey || savingApiKey"
+                        :class="!newApiKey || savingApiKey ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-700'"
+                        class="px-4 py-2 bg-green-600 rounded-lg transition">
+                        <span x-show="!savingApiKey">Save</span>
+                        <span x-show="savingApiKey" class="animate-spin">⏳</span>
+                    </button>
+                </div>
+                <p x-show="apiKeyConfigured" class="mt-2 text-sm text-green-400">
+                    ✓ Current key: <span x-text="maskedApiKey"></span>
+                </p>
+            </div>
+
+            <!-- Get API Key Link -->
+            <div class="mb-6 p-4 bg-gray-700 rounded-lg">
+                <p class="text-sm text-gray-400 mb-2">Don't have an API key?</p>
+                <a
+                    href="https://www.freepik.com/api"
+                    target="_blank"
+                    class="text-indigo-400 hover:text-indigo-300 text-sm">
+                    Get your Freepik API key →
+                </a>
+            </div>
+
+            <button
+                @click="showSettings = false"
+                class="w-full bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg transition">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- Video Player Modal -->
+    <div x-show="showVideoPlayer" x-transition class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+        <div class="w-full max-w-4xl mx-4" @click.away="showVideoPlayer = false">
+            <div class="aspect-video bg-black rounded-lg overflow-hidden">
+                <video
+                    :src="currentVideo?.video_path"
+                    controls
+                    autoplay
+                    class="w-full h-full object-contain">
+                </video>
+            </div>
+            <div class="mt-4 flex justify-between items-center">
+                <p class="text-gray-400 text-sm truncate flex-1 mr-4" x-text="currentVideo?.prompt"></p>
+                <div class="flex space-x-3">
+                    <a
+                        :href="currentVideo?.video_path"
+                        download
+                        class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition">
+                        ⬇️ Download
+                    </a>
+                    <button
+                        @click="showVideoPlayer = false"
+                        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">
+                        ✕ Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="fixed bottom-4 right-4 z-50 space-y-2">
+        <template x-for="(toast, index) in toasts" :key="index">
+            <div
+                x-show="toast.show"
+                x-transition
+                :class="toast.type === 'error' ? 'bg-red-600' : (toast.type === 'success' ? 'bg-green-600' : 'bg-indigo-600')"
+                class="px-4 py-3 rounded-lg shadow-lg flex items-center space-x-3 max-w-sm">
+                <span x-text="toast.type === 'error' ? '❌' : (toast.type === 'success' ? '✅' : 'ℹ️')"></span>
+                <span x-text="toast.message"></span>
+            </div>
+        </template>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

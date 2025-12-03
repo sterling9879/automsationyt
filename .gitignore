@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+
+# Database
+*.db
+*.sqlite3
+
+# Storage (generated files)
+storage/images/*
+storage/videos/*
+storage/thumbnails/*
+!storage/images/.gitkeep
+!storage/videos/.gitkeep
+!storage/thumbnails/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+/var/log/
+
+# Docker
+.docker/
+
+# Node (if any frontend build tools)
+node_modules/
+
+# Temporary files
+*.tmp
+*.temp
